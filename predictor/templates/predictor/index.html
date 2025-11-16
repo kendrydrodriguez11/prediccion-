@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictor de Acciones - Mamba</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .content {
+            padding: 40px;
+        }
+        .upload-section {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s;
+        }
+        .upload-section:hover {
+            border-color: #764ba2;
+            background: #f8f9ff;
+        }
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        .file-input-wrapper button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .file-input-wrapper button:hover {
+            transform: translateY(-2px);
+        }
+        .params-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .param-group {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .param-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #667eea;
+        }
+        .param-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+        .param-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .predict-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.2em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-bottom: 30px;
+        }
+        .predict-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+        .predict-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+        .loading.active {
+            display: block;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .results {
+            display: none;
+        }
+        .results.active {
+            display: block;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+        }
+        .metric-card h3 {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+        .metric-card .value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+        .chart-container {
+            background: #f8f9ff;
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 20px;
+        }
+        .file-name {
+            margin-top: 15px;
+            color: #667eea;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📈 Predictor de Acciones con Mamba</h1>
+            <p>Modelo de Deep Learning para predicción de precios de acciones</p>
+        </div>
+        
+        <div class="content">
+            <div class="upload-section">
+                <h2>📁 Cargar Archivo CSV</h2>
+                <p style="margin: 15px 0; color: #666;">Formato: fecha, precio, volumen, etc.</p>
+                <div class="file-input-wrapper">
+                    <button>Seleccionar Archivo</button>
+                    <input type="file" id="fileInput" accept=".csv">
+                </div>
+                <div class="file-name" id="fileName"></div>
+            </div>
+
+            <div class="params-grid">
+                <div class="param-group">
+                    <label>Tamaño Test:</label>
+                    <input type="number" id="nTest" value="300" min="1">
+                </div>
+                <div class="param-group">
+                    <label>Épocas:</label>
+                    <input type="number" id="epochs" value="100" min="1">
+                </div>
+                <div class="param-group">
+                    <label>Dimensión Oculta:</label>
+                    <input type="number" id="hiddenDim" value="16" min="1">
+                </div>
+                <div class="param-group">
+                    <label>Capas:</label>
+                    <input type="number" id="nLayers" value="2" min="1">
+                </div>
+                <div class="param-group">
+                    <label>Learning Rate:</label>
+                    <input type="number" id="lr" value="0.01" step="0.001" min="0.0001">
+                </div>
+            </div>
+
+            <button class="predict-btn" id="predictBtn" disabled>Iniciar Predicción</button>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Entrenando modelo y realizando predicciones...</p>
+            </div>
+
+            <div class="results" id="results">
+                <h2>📊 Resultados</h2>
+                <div class="metrics" id="metrics"></div>
+                <div class="chart-container">
+                    <canvas id="chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const predictBtn = document.getElementById('predictBtn');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        let selectedFile = null;
+
+        fileInput.addEventListener('change', (e) => {
+            selectedFile = e.target.files[0];
+            if (selectedFile) {
+                fileName.textContent = `✓ ${selectedFile.name}`;
+                predictBtn.disabled = false;
+            }
+        });
+
+        predictBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('params', JSON.stringify({
+                n_test: parseInt(document.getElementById('nTest').value),
+                epochs: parseInt(document.getElementById('epochs').value),
+                hidden_dim: parseInt(document.getElementById('hiddenDim').value),
+                n_layers: parseInt(document.getElementById('nLayers').value),
+                lr: parseFloat(document.getElementById('lr').value)
+            }));
+
+            predictBtn.disabled = true;
+            loading.classList.add('active');
+            results.classList.remove('active');
+
+            try {
+                const response = await fetch('/predict/', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showResults(data);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                loading.classList.remove('active');
+                predictBtn.disabled = false;
+            }
+        });
+
+        function showResults(data) {
+            const metricsDiv = document.getElementById('metrics');
+            metricsDiv.innerHTML = `
+                <div class="metric-card">
+                    <h3>MSE</h3>
+                    <div class="value">${data.metrics.mse.toFixed(4)}</div>
+                </div>
+                <div class="metric-card">
+                    <h3>RMSE</h3>
+                    <div class="value">${data.metrics.rmse.toFixed(4)}</div>
+                </div>
+                <div class="metric-card">
+                    <h3>MAE</h3>
+                    <div class="value">${data.metrics.mae.toFixed(4)}</div>
+                </div>
+                <div class="metric-card">
+                    <h3>R²</h3>
+                    <div class="value">${data.metrics.r2.toFixed(4)}</div>
+                </div>
+            `;
+
+            const ctx = document.getElementById('chart').getContext('2d');
+            if (window.myChart) window.myChart.destroy();
+            
+            window.myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: [
+                        {
+                            label: 'Precio Real',
+                            data: data.actual_prices,
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Precio Predicho',
+                            data: data.predicted_prices,
+                            borderColor: '#764ba2',
+                            backgroundColor: 'rgba(118, 75, 162, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Comparación Precio Real vs Predicho'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Fecha'
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Precio'
+                            }
+                        }
+                    }
+                }
+            });
+
+            results.classList.add('active');
+        }
+    </script>
+</body>
+</html>
